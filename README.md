@@ -1,21 +1,37 @@
 # DomovoyGithubPlugin
 
-**TODO: Add description**
+GitHub capabilities, types, validators, and runners for Domovoy.
+
+Capabilities talk to GitHub through `DomovoyCore.Shell` with argument lists.
+Runners, types, and validators sit on `DomovoyCore`. The host owns each
+`DomovoyCore.Runtime`.
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `domovoy_github_plugin` to your list of dependencies in `mix.exs`:
+Add to your `mix.exs`:
 
 ```elixir
-def deps do
+defp deps do
   [
-    {:domovoy_github_plugin, "~> 0.1.0"}
+    {:domovoy_github_plugin, github: "theoneandonlywoj/Domovoy-Github-Plugin"}
   ]
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/domovoy_github_plugin>.
+## Development
 
+Requires Erlang/OTP and Elixir from `.tool-versions`. Fetch dependencies with
+`mix deps.get`.
+
+Repository Git hooks are opt-in:
+
+```sh
+make hooks-install
+```
+
+## Verification
+
+```sh
+mix quality
+mix test
+```
