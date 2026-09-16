@@ -1,6 +1,6 @@
 defmodule DomovoyGithubPlugin do
   @moduledoc """
-  Documentation for `DomovoyGithubPlugin`.
+  GitHub capabilities, types, validators, and runners for Domovoy.
   """
 
   @doc """
@@ -12,6 +12,7 @@ defmodule DomovoyGithubPlugin do
       :world
 
   """
+  @spec hello() :: :world
   def hello do
     :world
   end
