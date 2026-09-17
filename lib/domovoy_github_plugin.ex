@@ -1,19 +1,8 @@
 defmodule DomovoyGithubPlugin do
   @moduledoc """
-  GitHub capabilities, types, validators, and runners for Domovoy.
+  GitHub capabilities, types, and runners for Domovoy.
+
+  Capabilities talk to GitHub through `Req`. Runners and types sit on
+  `DomovoyCore`. The host owns each `DomovoyCore.Runtime`.
   """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> DomovoyGithubPlugin.hello()
-      :world
-
-  """
-  @spec hello() :: :world
-  def hello do
-    :world
-  end
 end
