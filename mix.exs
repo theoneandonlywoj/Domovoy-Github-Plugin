@@ -30,7 +30,10 @@ defmodule DomovoyGithubPlugin.MixProject do
 
   defp deps do
     [
-      {:domovoy_core, github: "theoneandonlywoj/Domovoy-Core"},
+      {:domovoy_core, github: "theoneandonlywoj/Domovoy-Core", branch: "main", override: true},
+      {:domovoy_git_plugin, github: "theoneandonlywoj/Domovoy-Git-Plugin", branch: "main"},
+      {:req, "~> 0.7"},
+      {:plug, "~> 1.0", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
