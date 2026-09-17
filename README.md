@@ -1,10 +1,9 @@
 # DomovoyGithubPlugin
 
-GitHub capabilities, types, validators, and runners for Domovoy.
+GitHub capabilities, types, and runners for Domovoy.
 
-Capabilities talk to GitHub through `DomovoyCore.Shell` with argument lists.
-Runners, types, and validators sit on `DomovoyCore`. The host owns each
-`DomovoyCore.Runtime`.
+Capabilities talk to GitHub through `Req`. Runners and types sit on
+`DomovoyCore`. The host owns each `DomovoyCore.Runtime`.
 
 ## Installation
 
