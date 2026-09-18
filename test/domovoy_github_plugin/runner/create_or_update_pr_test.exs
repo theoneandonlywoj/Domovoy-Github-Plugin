@@ -3,6 +3,7 @@ defmodule DomovoyGithubPlugin.Runner.CreateOrUpdatePrTest do
 
   alias DomovoyCore.Error
   alias DomovoyCore.Node
+  alias DomovoyCore.Type.Boolean, as: BooleanType
   alias DomovoyCore.Type.Directory, as: DirectoryType
   alias DomovoyCore.Type.String, as: StringType
   alias DomovoyCore.Value
@@ -54,6 +55,7 @@ defmodule DomovoyGithubPlugin.Runner.CreateOrUpdatePrTest do
             assert payload["body"] == "why"
             assert payload["head"] == "main"
             assert payload["base"] == "main"
+            assert payload["draft"] == false
 
             Req.Test.json(conn, %{
               "number" => 7,
@@ -97,6 +99,44 @@ defmodule DomovoyGithubPlugin.Runner.CreateOrUpdatePrTest do
       assert %Value{value: change} = NodeRunner.run(build_node(repository, %{}), [])
       assert change.action == "updated"
       assert change.number == 7
+    end
+
+    test "opens a draft pull request when asked", %{repository: repository} do
+      Req.Test.expect(__MODULE__, 2, fn conn ->
+        case conn.method do
+          "GET" ->
+            Req.Test.json(conn, [])
+
+          "POST" ->
+            {:ok, body, conn} = Plug.Conn.read_body(conn)
+            assert JSON.decode!(body)["draft"] == true
+
+            Req.Test.json(conn, %{"number" => 1, "html_url" => "u"})
+        end
+      end)
+
+      node = build_node(repository, %{draft: {true, BooleanType}})
+
+      assert %Value{value: %{action: "created"}} = NodeRunner.run(node, [])
+    end
+
+    test "does not send draft on an update", %{repository: repository} do
+      Req.Test.expect(__MODULE__, 2, fn conn ->
+        case conn.method do
+          "GET" ->
+            Req.Test.json(conn, [%{"number" => 7}])
+
+          "PATCH" ->
+            {:ok, body, conn} = Plug.Conn.read_body(conn)
+            refute Map.has_key?(JSON.decode!(body), "draft")
+
+            Req.Test.json(conn, %{"number" => 7, "html_url" => "u"})
+        end
+      end)
+
+      node = build_node(repository, %{draft: {true, BooleanType}})
+
+      assert %Value{value: %{action: "updated"}} = NodeRunner.run(node, [])
     end
 
     test "falls back to default_base_branch from the config", %{repository: repository} do

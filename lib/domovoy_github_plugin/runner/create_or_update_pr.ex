@@ -11,6 +11,9 @@ defmodule DomovoyGithubPlugin.Runner.CreateOrUpdatePr do
     * `body` — necessary. A `DomovoyCore.Type.String`.
     * `base_branch` — optional. A `DomovoyCore.Type.String`. The runner reads
       `default_base_branch` from the GitHub configuration when this is absent.
+    * `draft` — optional. A `DomovoyCore.Type.Boolean`. A `true` opens the pull
+      request as a draft. GitHub cannot change this on an update, so the runner
+      sends it only when it opens the pull request. The default is `false`.
     * `working_directory` — optional. A `DomovoyCore.Type.Directory`. The default
       is the current directory.
 
@@ -49,6 +52,7 @@ defmodule DomovoyGithubPlugin.Runner.CreateOrUpdatePr do
   alias DomovoyCore.Error
   alias DomovoyCore.Node
   alias DomovoyCore.Runner
+  alias DomovoyCore.Type.Boolean, as: BooleanType
   alias DomovoyCore.Type.Directory, as: DirectoryType
   alias DomovoyCore.Type.String, as: StringType
   alias DomovoyGithubPlugin.Capabilities, as: GithubCapabilities
@@ -58,6 +62,7 @@ defmodule DomovoyGithubPlugin.Runner.CreateOrUpdatePr do
     field(:title, StringType)
     field(:body, StringType)
     field(:base_branch, StringType)
+    field(:draft, BooleanType, default: false)
     field(:working_directory, DirectoryType, default: ".")
   end
 
@@ -68,15 +73,26 @@ defmodule DomovoyGithubPlugin.Runner.CreateOrUpdatePr do
   def run(%Input{} = input, %Context{node: node_name}) do
     with {:ok, base_branch} <- base_branch(input.base_branch, input.working_directory, node_name),
          {:ok, repo} <-
-           GithubCapabilities.current_repo(input.working_directory, node_name, :working_directory),
-         {:ok, pulls} <- list_open_pulls(repo, input.working_directory, node_name) do
-      create_or_update(
-        pulls,
-        repo,
-        {input.title, input.body, base_branch},
-        input.working_directory,
-        node_name
+           GithubCapabilities.current_repo(input.working_directory, node_name, :working_directory) do
+      create_body = %{
+        "title" => input.title,
+        "body" => input.body,
+        "head" => repo.branch,
+        "base" => base_branch,
+        "draft" => input.draft
+      }
+
+      update_body = %{"title" => input.title, "body" => input.body}
+
+      repo.owner
+      |> GithubCapabilities.upsert_pull(
+        repo.repo,
+        repo.branch,
+        create_body,
+        update_body,
+        input.working_directory
       )
+      |> change(node_name)
     end
   end
 
@@ -104,55 +120,13 @@ defmodule DomovoyGithubPlugin.Runner.CreateOrUpdatePr do
     end
   end
 
-  @spec list_open_pulls(
-          repo :: GithubCapabilities.repo(),
-          directory :: String.t(),
-          node_name :: Node.name()
-        ) :: {:ok, [map()]} | {:error, Error.t()}
-  defp list_open_pulls(repo, directory, node_name) do
-    head = "#{repo.owner}:#{repo.branch}"
-
-    case GithubCapabilities.list_open_pulls(repo.owner, repo.repo, head, directory) do
-      {:ok, pulls} when is_list(pulls) -> {:ok, pulls}
-      {:ok, body} -> {:error, GithubError.request_failed(inspect(body), node_name, :title)}
-      {:error, reason} -> {:error, GithubError.request_failed(reason, node_name, :title)}
-    end
-  end
-
-  @spec create_or_update(
-          pulls :: [map()],
-          repo :: GithubCapabilities.repo(),
-          content :: {String.t(), String.t(), String.t()},
-          directory :: String.t(),
-          node_name :: Node.name()
-        ) :: {:ok, map()} | {:error, Error.t()}
-  defp create_or_update([], repo, {title, body, base_branch}, directory, node_name) do
-    payload = %{"title" => title, "body" => body, "head" => repo.branch, "base" => base_branch}
-
-    repo.owner
-    |> GithubCapabilities.create_pull(repo.repo, payload, directory)
-    |> change("created", node_name)
-  end
-
-  defp create_or_update([pull | _rest], repo, {title, body, _base}, directory, node_name) do
-    payload = %{"title" => title, "body" => body}
-
-    repo.owner
-    |> GithubCapabilities.update_pull(repo.repo, pull["number"], payload, directory)
-    |> change("updated", node_name)
-  end
-
   @spec change(
-          result :: GithubCapabilities.result(),
-          action :: String.t(),
+          result :: {:ok, {:created | :updated, map()}} | {:error, GithubCapabilities.failure()},
           node_name :: Node.name()
         ) :: {:ok, map()} | {:error, Error.t()}
-  defp change({:ok, pull}, action, _node_name) when is_map(pull),
-    do: {:ok, %{action: action, number: pull["number"], url: pull["html_url"]}}
+  defp change({:ok, {action, pull}}, _node_name),
+    do: {:ok, %{action: Atom.to_string(action), number: pull["number"], url: pull["html_url"]}}
 
-  defp change({:ok, body}, _action, node_name),
-    do: {:error, GithubError.request_failed(inspect(body), node_name, :title)}
-
-  defp change({:error, reason}, _action, node_name),
-    do: {:error, GithubError.request_failed(reason, node_name, :title)}
+  defp change({:error, failure}, node_name),
+    do: {:error, GithubError.request_failed(failure, node_name, :title)}
 end
