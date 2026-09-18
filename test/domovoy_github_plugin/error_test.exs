@@ -20,7 +20,21 @@ defmodule DomovoyGithubPlugin.ErrorTest do
                :github_origin_not_parsed,
                :github_invalid_pull_request_state,
                :github_config_not_found,
-               :github_create_or_update_pr_failed
+               :github_create_or_update_pr_failed,
+               :github_pull_request_not_found,
+               :github_graphql_failed,
+               :github_invalid_merge_method,
+               :github_pull_request_not_mergeable,
+               :github_stack_cycle_detected,
+               :github_invalid_review_event,
+               :github_invalid_commit_status_state,
+               :github_workflow_run_not_found,
+               :github_workflow_run_timed_out,
+               :github_workflow_logs_write_failed,
+               :github_issue_not_found,
+               :github_label_not_found,
+               :github_release_not_found,
+               :github_branch_not_found
              ]
     end
 
@@ -87,6 +101,21 @@ defmodule DomovoyGithubPlugin.ErrorTest do
     end
   end
 
+  describe "request_failed/3" do
+    test "keeps the status of a failure and its message as the reason" do
+      failure = %{status: 404, message: "Not Found"}
+
+      assert %Error{reason: "Not Found", metadata: %{status: 404}} =
+               GithubError.request_failed(failure, @node_name, @field_name)
+    end
+
+    test "has no status for a plain reason" do
+      error = GithubError.request_failed("unexpected body", @node_name, @field_name)
+
+      refute Map.has_key?(error.metadata, :status)
+    end
+  end
+
   describe "create_or_update_pr_failed/3" do
     test "carries the reason of the failure" do
       assert %Error{type: type, reason: reason} =
@@ -112,7 +141,21 @@ defmodule DomovoyGithubPlugin.ErrorTest do
         @node_name,
         @field_name
       ),
-      GithubError.create_or_update_pr_failed("Validation Failed", @node_name, @field_name)
+      GithubError.create_or_update_pr_failed("Validation Failed", @node_name, @field_name),
+      GithubError.pull_request_not_found(nil, "owner:feature", @node_name, @field_name),
+      GithubError.graphql_failed("Could not resolve to a node", @node_name, @field_name),
+      GithubError.invalid_merge_method("fast-forward", ["merge"], @node_name, @field_name),
+      GithubError.pull_request_not_mergeable(7, "not mergeable", @node_name, @field_name),
+      GithubError.stack_cycle_detected(["a", "b", "a"], @node_name, @field_name),
+      GithubError.invalid_review_event("merge", ["approve"], @node_name, @field_name),
+      GithubError.invalid_commit_status_state("done", ["success"], @node_name, @field_name),
+      GithubError.workflow_run_not_found("main", "ci.yml", @node_name, @field_name),
+      GithubError.workflow_run_timed_out(123, 0, @node_name, @field_name),
+      GithubError.workflow_logs_write_failed("/x.zip", :eacces, @node_name, @field_name),
+      GithubError.issue_not_found(99, @node_name, @field_name),
+      GithubError.label_not_found("wip", 7, @node_name, @field_name),
+      GithubError.release_not_found("v9", @node_name, @field_name),
+      GithubError.branch_not_found("gone", @node_name, @field_name)
     ]
   end
 end

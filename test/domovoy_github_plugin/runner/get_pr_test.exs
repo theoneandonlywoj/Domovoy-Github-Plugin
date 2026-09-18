@@ -4,6 +4,7 @@ defmodule DomovoyGithubPlugin.Runner.GetPrTest do
   alias DomovoyCore.Error
   alias DomovoyCore.Node
   alias DomovoyCore.Type.Directory, as: DirectoryType
+  alias DomovoyCore.Type.Integer, as: IntegerType
   alias DomovoyCore.Type.String, as: StringType
   alias DomovoyCore.Value
   alias DomovoyGithubPlugin.Capabilities
@@ -164,6 +165,42 @@ defmodule DomovoyGithubPlugin.Runner.GetPrTest do
       assert pull.number == 7
     end
 
+    test "reads a numbered pull request instead of searching the branch", %{
+      repository: repository
+    } do
+      Req.Test.expect(__MODULE__, fn conn ->
+        assert conn.request_path == "/repos/owner/repo/pulls/9"
+
+        Req.Test.json(conn, %{
+          "number" => 9,
+          "state" => "closed",
+          "merged_at" => "2026-09-09T10:00:00Z",
+          "title" => "old",
+          "body" => nil,
+          "html_url" => "https://github.com/owner/repo/pull/9"
+        })
+      end)
+
+      node = build_node(repository, %{number: {9, IntegerType}})
+
+      assert %Value{value: pull} = NodeRunner.run(node, [])
+      assert pull.state == :merged
+      assert pull.number == 9
+      assert pull.title == "old"
+    end
+
+    test "succeeds with state: :not_found for a number that names no pull request", %{
+      repository: repository
+    } do
+      Req.Test.expect(__MODULE__, fn conn ->
+        conn |> Plug.Conn.put_status(404) |> Req.Test.json(%{"message" => "Not Found"})
+      end)
+
+      node = build_node(repository, %{number: {99, IntegerType}})
+
+      assert %Value{value: %{state: :not_found, number: nil}} = NodeRunner.run(node, [])
+    end
+
     test "reports GitHub's message as a contextual error", %{repository: repository} do
       Req.Test.expect(__MODULE__, fn conn ->
         conn |> Plug.Conn.put_status(401) |> Req.Test.json(%{"message" => "Bad credentials"})
@@ -172,6 +209,7 @@ defmodule DomovoyGithubPlugin.Runner.GetPrTest do
       assert %Error{} = error = NodeRunner.run(build_node(repository), [])
       assert error.type == :github_request_failed
       assert error.reason == "Bad credentials"
+      assert error.metadata[:status] == 401
     end
 
     test "reports an unparseable origin without calling GitHub", %{repository: repository} do

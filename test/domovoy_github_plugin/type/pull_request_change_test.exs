@@ -3,7 +3,30 @@ defmodule DomovoyGithubPlugin.Type.PullRequestChangeTest do
 
   alias DomovoyGithubPlugin.Type.PullRequestChange, as: PullRequestChangeType
 
+  doctest PullRequestChangeType
+
+  describe "actions/0" do
+    test "names every action a runner reports" do
+      assert PullRequestChangeType.actions() == [
+               "created",
+               "updated",
+               "closed",
+               "reopened",
+               "branch_updated",
+               "ready_for_review",
+               "retargeted"
+             ]
+    end
+  end
+
   describe "cast/2" do
+    test "wraps each named action" do
+      for action <- PullRequestChangeType.actions() do
+        change = %{action: action, number: 7, url: "u"}
+        assert {:ok, ^change} = PullRequestChangeType.cast(change, %{})
+      end
+    end
+
     test "wraps a created and an updated change" do
       created = %{action: "created", number: 7, url: "https://github.com/pr/7"}
       updated = %{created | action: "updated"}

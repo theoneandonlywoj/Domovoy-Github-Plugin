@@ -1,15 +1,19 @@
 defmodule DomovoyGithubPlugin.Runner.GetPr do
   @moduledoc """
-  Reads the GitHub pull request for the current branch of a checkout.
+  Reads a GitHub pull request of a checkout.
 
-  The repository and branch come from the `origin` remote and `HEAD`. A branch
-  without a pull request gives `state: :not_found` and does not fail.
+  The pull request is the one that `number` names, or the newest one of the
+  current branch. The repository and branch come from the `origin` remote and
+  `HEAD`. A branch without a pull request, or a number that names none, gives
+  `state: :not_found` and does not fail.
 
   GitHub reports a merged pull request as closed. This runner gives `:merged`
   for a merged pull request. It gives `:closed` for one closed without a merge.
 
   ## Inputs
 
+    * `number` — optional. A `DomovoyCore.Type.Integer`. With it the runner reads
+      that pull request and ignores `state`.
     * `state` — optional. A `DomovoyCore.Type.String`. It is `"open"`, `"closed"`,
       or `"all"`. The default is `"all"`.
     * `working_directory` — optional. A `DomovoyCore.Type.Directory`. The default
@@ -48,6 +52,7 @@ defmodule DomovoyGithubPlugin.Runner.GetPr do
   alias DomovoyCore.Node
   alias DomovoyCore.Runner
   alias DomovoyCore.Type.Directory, as: DirectoryType
+  alias DomovoyCore.Type.Integer, as: IntegerType
   alias DomovoyCore.Type.String, as: StringType
   alias DomovoyGithubPlugin.Capabilities, as: GithubCapabilities
   alias DomovoyGithubPlugin.Error, as: GithubError
@@ -56,6 +61,7 @@ defmodule DomovoyGithubPlugin.Runner.GetPr do
   @state_filters ["open", "closed", "all"]
 
   input do
+    field(:number, IntegerType)
     field(:state, StringType, default: "all")
     field(:working_directory, DirectoryType, default: ".")
   end
@@ -64,10 +70,12 @@ defmodule DomovoyGithubPlugin.Runner.GetPr do
 
   @impl Runner
   @spec run(input :: Input.t(), context :: Context.t()) :: Runner.result()
-  def run(%Input{state: state, working_directory: directory}, %Context{node: node_name}) do
-    with {:ok, state} <- validated_state_filter(state, node_name),
+  def run(%Input{} = input, %Context{node: node_name}) do
+    directory = input.working_directory
+
+    with {:ok, state} <- validated_state_filter(input.state, node_name),
          {:ok, repo} <- GithubCapabilities.current_repo(directory, node_name, :working_directory),
-         {:ok, pulls} <- list_pulls(repo, state, directory, node_name) do
+         {:ok, pulls} <- pulls(repo, input.number, state, directory, node_name) do
       {:ok, lookup(pulls)}
     end
   end
@@ -100,19 +108,29 @@ defmodule DomovoyGithubPlugin.Runner.GetPr do
      )}
   end
 
-  @spec list_pulls(
+  @spec pulls(
           repo :: GithubCapabilities.repo(),
+          number :: pos_integer() | nil,
           state :: String.t(),
           directory :: String.t(),
           node_name :: Node.name()
         ) :: {:ok, [map()]} | {:error, Error.t()}
-  defp list_pulls(repo, state, directory, node_name) do
+  defp pulls(repo, nil, state, directory, node_name) do
     head = "#{repo.owner}:#{repo.branch}"
 
     case GithubCapabilities.list_pulls(repo.owner, repo.repo, head, state, directory) do
       {:ok, pulls} when is_list(pulls) -> {:ok, pulls}
       {:ok, body} -> {:error, GithubError.request_failed(inspect(body), node_name, :state)}
-      {:error, reason} -> {:error, GithubError.request_failed(reason, node_name, :state)}
+      {:error, failure} -> {:error, GithubError.request_failed(failure, node_name, :state)}
+    end
+  end
+
+  defp pulls(repo, number, _state, directory, node_name) do
+    case GithubCapabilities.get_pull(repo.owner, repo.repo, number, directory) do
+      {:ok, pull} when is_map(pull) -> {:ok, [pull]}
+      {:ok, body} -> {:error, GithubError.request_failed(inspect(body), node_name, :number)}
+      {:error, %{status: 404}} -> {:ok, []}
+      {:error, failure} -> {:error, GithubError.request_failed(failure, node_name, :number)}
     end
   end
 

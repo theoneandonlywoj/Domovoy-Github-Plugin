@@ -1,14 +1,19 @@
 defmodule DomovoyGithubPlugin.Type.PullRequestChange do
   @moduledoc """
-  `DomovoyCore.Type` for the effect of a create-or-update on a pull request.
+  `DomovoyCore.Type` for the effect of a runner on a pull request.
 
-  `action` is `"created"` when the branch had no open pull request and the
-  runner opened one. `action` is `"updated"` when the runner changed a pull
-  request that was already open. In both conditions the value holds the number
-  and the URL of the pull request. Therefore the caller reports the result and
-  does not need a second lookup.
+  `action` names what happened. `"created"` says the branch had no open pull
+  request and the runner opened one. `"updated"` says the runner changed a pull
+  request that was already open. `"closed"`, `"reopened"`, `"branch_updated"`,
+  `"ready_for_review"`, and `"retargeted"` name the other changes a runner
+  makes. In every condition the value holds the number and the URL of the pull
+  request. Therefore the caller reports the result and does not need a second
+  lookup.
 
   ## Examples
+
+      iex> DomovoyGithubPlugin.Type.PullRequestChange.actions()
+      ["created", "updated", "closed", "reopened", "branch_updated", "ready_for_review", "retargeted"]
 
   `dump/1` and `load/1` round-trip a value through a document:
 
@@ -22,17 +27,36 @@ defmodule DomovoyGithubPlugin.Type.PullRequestChange do
 
   use DomovoyCore.Type
 
-  @typedoc "What kind of create-or-update happened."
+  @typedoc "What a runner did to the pull request."
   @type action() :: String.t()
 
-  @typedoc "The pull request a create-or-update landed on, and which it was."
+  @typedoc "The pull request a runner changed, and what it did."
   @type state() :: %{
           action: action(),
           number: integer() | nil,
           url: String.t() | nil
         }
 
-  @actions ["created", "updated"]
+  @actions [
+    "created",
+    "updated",
+    "closed",
+    "reopened",
+    "branch_updated",
+    "ready_for_review",
+    "retargeted"
+  ]
+
+  @doc """
+  Returns every action that this type names.
+
+  ## Examples
+
+      iex> "closed" in DomovoyGithubPlugin.Type.PullRequestChange.actions()
+      true
+  """
+  @spec actions() :: [action()]
+  def actions, do: @actions
 
   defguardp is_change(action, number, url)
             when action in @actions and (is_integer(number) or is_nil(number)) and
